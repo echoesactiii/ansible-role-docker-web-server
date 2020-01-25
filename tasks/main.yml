@@ -1,0 +1,74 @@
+- name: Install dependencies
+  yum:
+    name: "{{ docker_web_yum_dependencies }}"
+    state: present
+  tags:
+    - yum
+
+- name: Install dependencies
+  pip:
+    name: "{{ docker_web_pip_dependencies }}"
+    state: present
+  tags:
+    - pip
+
+- name: Setup nginx reverse proxy
+  docker_container:
+    name: http-proxy
+    published_ports:
+      - 0.0.0.0:{{ docker_web_http_port }}:80
+      - 0.0.0.0:{{ docker_web_https_port }}:443
+    restart_policy: always
+    image: jwilder/nginx-proxy
+    labels:
+        com.github.jrcs.letsencrypt_nginx_proxy_companion.nginx_proxy: "true"
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+      - /opt/nginx_certs:/etc/nginx/certs
+      - /etc/nginx/vhost.d
+      - /usr/share/nginx/html
+    env:
+      ENABLE_IPV6: "true"
+  tags:
+    - nginx
+
+- name: Setup reverse proxy LetsEncrypt companion
+  docker_container:
+    name: http-letsencrypt
+    restart_policy: always
+    volumes:
+      - /opt/nginx_certs:/etc/nginx/certs
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    volumes_from:
+      - http-proxy
+    image: jrcs/letsencrypt-nginx-proxy-companion
+  tags:
+    - nginx
+
+- name: Create bind mount directory
+  file:
+    path: /var/docker-mount/
+    state: directory
+
+- name: Install deploy key for git repo
+  copy: src="{{ docker_web_deploy_key }}" dest="{{ docker_web_deploy_key_remote }}" force=yes mode=0600 owner=root
+  tags:
+   - git
+
+- name: Fetch web containers repo from git
+  git:
+    repo: "{{ docker_web_git_repo }}"
+    dest: /opt/web-containers
+    clone: yes
+    update: yes
+    accept_hostkey: yes
+    recursive: yes
+    force: yes
+    key_file: "{{ docker_web_deploy_key_remote }}"
+  tags:
+    - git
+
+- name: Bring up configured docker containers
+  shell: "{{ docker_web_build_command }}"
+  tags:
+    - build

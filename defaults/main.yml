@@ -1,0 +1,13 @@
+---
+docker_web_http_port: 80
+docker_web_https_port: 443
+docker_web_deploy_key: "{{ role_path }}/../../files/deploy_key"
+docker_web_deploy_key_remote: "/tmp/git.deploy_key"
+docker_web_build_command: "cd /opt/web-containers && docker compose up -d"
+docker_web_yum_dependencies:
+  - python-setuptools
+  - python-pip
+  - git
+  - docker-compose
+docker_web_pip_dependencies:
+  - docker
